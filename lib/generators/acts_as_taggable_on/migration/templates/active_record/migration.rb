@@ -21,10 +21,20 @@ class ActsAsTaggableOnMigration < ActiveRecord::Migration
 
     add_index :taggings, :tag_id
     add_index :taggings, [:taggable_id, :taggable_type, :context]
+
+    # ALIAS SUPPORT: (provided by Brad Phelan => rocket_tag gem)
+    create_table :alias_tags, :id => false do |t|
+      t.integer :tag_id
+      t.integer :alias_id
+    end
+
+    add_index :alias_tags, :tag_id
+    add_index :alias_tags, :alias_id
   end
 
   def self.down
     drop_table :taggings
     drop_table :tags
+    drop_table :alias_tags
   end
 end

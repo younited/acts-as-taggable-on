@@ -65,6 +65,12 @@ module ActsAsTaggableOn::Taggable
         object.column_names.map { |column| "#{object.table_name}.#{column}" }.join(", ")
       end
 
+      # for each tag in the list fetch the aliases
+      def get_aliased_names_for_list(list)
+        alias_ids = ActsAsTaggableOn::Tag.joins(:alias).where({tags: {name: list}}).pluck(:alias_id)
+        return ActsAsTaggableOn::Tag.where(id: alias_ids).pluck(:name)
+      end
+
       ##
       # Return a scope of objects that are tagged with the specified tags.
       #
@@ -74,6 +80,7 @@ module ActsAsTaggableOn::Taggable
       #                       * <tt>:any</tt> - if set to true, return objects that are tagged with *ANY* of the specified tags
       #                       * <tt>:match_all</tt> - if set to true, return objects that are *ONLY* tagged with the specified tags
       #                       * <tt>:owned_by</tt> - return objects that are *ONLY* owned by the owner
+      #                       * <tt>:include_aliases</tt> -
       #
       # Example:
       #   User.tagged_with("awesome", "cool")                     # Users that are tagged with awesome and cool
@@ -83,6 +90,19 @@ module ActsAsTaggableOn::Taggable
       #   User.tagged_with("awesome", "cool", :owned_by => foo ) # Users that are tagged with just awesome and cool by 'foo'
       def tagged_with(tags, options = {})
         tag_list = ActsAsTaggableOn::TagList.from(tags)
+
+        # ALIAS SUPPORT: (provided by Brad Phelan => rocket_tag gem)
+        aliased_tags = if options[:include_aliases] == true
+          get_aliased_names_for_list(tags)
+        else
+          []
+        end
+
+        options[:any] = true if aliased_tags.size > 0
+
+        tag_list += aliased_tags
+        tag_list.uniq!
+
         empty_result = where("1 = 0")
 
         return empty_result if tag_list.empty?
@@ -355,7 +375,7 @@ module ActsAsTaggableOn::Taggable
               new_tags |= current_tags[index...current_tags.size] & shared_tags
 
               # Order the array of tag objects to match the tag list
-              new_tags = tags.map do |t| 
+              new_tags = tags.map do |t|
                 new_tags.find { |n| n.name.downcase == t.name.downcase }
               end.compact
             end
